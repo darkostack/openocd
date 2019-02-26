@@ -1,4 +1,4 @@
-_libs
+/._libs
 *.o
 *.lo
 vti.tmp*
