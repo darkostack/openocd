@@ -1,6 +1,15 @@
-/._libs
+.libs/
+_libs/
 *.o
 *.lo
+*.so
+*.dll
+*.exe
+lib*.a
+jimsh
+libjim.a
+Tcl.html
+_*.c
 vti.tmp*
 version.texi.tmp*
 doc/openocd.t2d
