@@ -16,3 +16,7 @@ doc/openocd.t2d
 doc/openocd.t2d
 so_locations
 *.la
+.DS_Store
+jim-4d972fc6.o.tmp
+minidriver_imp.h
+startup_tcl.inc
