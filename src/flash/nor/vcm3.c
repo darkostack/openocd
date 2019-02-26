@@ -158,8 +158,8 @@ static int vcm3_flash_lock(struct vcm3_info *chip)
 }
 
 static int vcm3_flash_generic_erase(struct vcm3_info *chip,
-                                  uint32_t erase_register,
-                                  uint32_t erase_addr)
+                                    uint32_t erase_register,
+                                    uint32_t erase_addr)
 {
     int res = ERROR_OK;
 
@@ -493,8 +493,8 @@ static int vcm3_erase(struct flash_bank *bank, int first, int last)
 }
 
 static int vcm3_code_flash_write(struct flash_bank *bank,
-                               struct vcm3_info *chip,
-                               const uint8_t *buffer, uint32_t offset, uint32_t count)
+                                 struct vcm3_info *chip,
+                                 const uint8_t *buffer, uint32_t offset, uint32_t count)
 {
     int res;
 
@@ -547,7 +547,7 @@ static int vcm3_code_flash_write(struct flash_bank *bank,
 }
 
 static int vcm3_write(struct flash_bank *bank, const uint8_t *buffer,
-                    uint32_t offset, uint32_t count)
+                      uint32_t offset, uint32_t count)
 {
     int res;
     struct vcm3_info *chip;
