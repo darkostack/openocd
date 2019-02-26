@@ -20,3 +20,4 @@ so_locations
 jim-4d972fc6.o.tmp
 minidriver_imp.h
 startup_tcl.inc
+src/openocd
