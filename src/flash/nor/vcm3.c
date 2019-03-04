@@ -394,30 +394,131 @@ exit:
     return res;
 }
 
+static const uint8_t vcm3_flash_write_code[] = {
+    /* see contrib/loaders/flash/vcm3x.S */
+                                /* wait_fifo: */
+    0xd0, 0xf8, 0x00, 0x80,     /* ldr      r8, [r0, #0] */
+    0xb8, 0xf1, 0x00, 0x0f,     /* cmp      r8, #0 */
+    0x16, 0xd0,                 /* beq      exit */
+    0x47, 0x68,                 /* ldr      r7, [r0, #4] */
+    0x47, 0x45,                 /* cmp      r7, r8 */
+    0xf7, 0xd0,                 /* beq      wait_fifo */
+
+    0x16, 0x46,                 /* mov      r6, r2 */
+    0x04, 0x32,                 /* adds     r2, r2, #4 */
+    0xa6, 0x64,                 /* str      r6, [r4, #VC_FLASH_PGADDR_OFFSET] */
+    0x57, 0xf8, 0x04, 0x6b,     /* ldr      r6, [r7], #0x04 */
+    0xe6, 0x64,                 /* str      r6, [r4, #VC_FLASH_PGDATA_OFFSET] */
+                                /* busy: */
+    0xd4, 0xf8, 0x88, 0x60,     /* ldr      r6, [r4, #VC_FLASH_STS_OFFSET] */
+    0x4f, 0xf0, 0x01, 0x05,     /* mov      r5, #1 */
+    0xb5, 0x42,                 /* cmp      r5, r6 */
+    0xf9, 0xd1,                 /* bne      busy */
+    0x8f, 0x42,                 /* cmp      r7, r1 */
+    0x28, 0xbf,                 /* it       cs */
+    0x00, 0xf1, 0x08, 0x07,     /* addcs    r7, r0, #8 */
+    0x47, 0x60,                 /* str      r7, [r0, #4] */
+    0x04, 0x3b,                 /* subs     r3, r3, #4 */
+    0x03, 0xb1,                 /* cbz      r3, exit */
+    0xe3, 0xe7,                 /* b        wait_fifo */
+                                /* exit: */
+    0x30, 0x46,                 /* mov      r0, r6 */
+    0x00, 0xbe,                 /* bkpt     0x0000 */
+};
+
 /* start a low level flash write for the specified region */
 static int vcm3_flash_write(struct vcm3_info *chip, uint32_t offset, const uint8_t *buffer, uint32_t bytes)
 {
+    struct target *target = chip->target;
+    uint32_t buffer_size = 16384;
+    struct working_area *write_algorithm;
+    struct working_area *source;
+    uint32_t address = offset;
+    struct reg_param reg_params[5];
+    struct armv7m_algorithm armv7m_info;
     int retval = ERROR_OK;
 
 	LOG_INFO("writing buffer to flash offset=0x%"PRIx32" bytes=0x%"PRIx32, offset, bytes);
 
     assert(bytes % 4 == 0);
 
-    for(; bytes > 0; bytes -= 4) {
-        uint32_t value;
-        memcpy(&value, buffer, sizeof(uint32_t));
+    /* allocate working area with flash programming code */
+    if (target_alloc_working_area(target, sizeof(vcm3_flash_write_code), &write_algorithm) != ERROR_OK) {
+		LOG_WARNING("no working area available, falling back to slow memory writes");
 
-        target_write_u32(chip->target, FCSR_EMBFLASH_PGADDR, offset);
-        target_write_u32(chip->target, FCSR_EMBFLASH_PGDATA, value);
+        for(; bytes > 0; bytes -= 4) {
+            uint32_t value;
+            memcpy(&value, buffer, sizeof(uint32_t));
 
-        retval = vcm3_flash_wait_for_status_idle(chip);
-        if (retval != ERROR_OK) {
-            return retval;
+            target_write_u32(chip->target, FCSR_EMBFLASH_PGADDR, offset);
+            target_write_u32(chip->target, FCSR_EMBFLASH_PGDATA, value);
+
+            retval = vcm3_flash_wait_for_status_idle(chip);
+            if (retval != ERROR_OK) {
+                return retval;
+            }
+
+            offset += 4;
+            buffer += 4;
         }
 
-        offset += 4;
-        buffer += 4;
+        return ERROR_OK;
     }
+
+    retval = target_write_buffer(target, write_algorithm->address,
+                                 sizeof(vcm3_flash_write_code),
+                                 vcm3_flash_write_code);
+
+    if (retval != ERROR_OK) {
+        return retval;
+    }
+
+    /* memory buffer */
+    while (target_alloc_working_area(target, buffer_size, &source) != ERROR_OK) {
+        buffer_size /= 2;
+        if (buffer_size <= 256) {
+			/* free working area, write algorithm already allocated */
+			target_free_working_area(target, write_algorithm);
+			LOG_WARNING("No large enough working area available, can't do block memory writes");
+			return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
+        }
+    }
+
+    armv7m_info.common_magic = ARMV7M_COMMON_MAGIC;
+    armv7m_info.core_mode = ARM_MODE_THREAD;
+
+    init_reg_param(&reg_params[0], "r0", 32, PARAM_IN_OUT);     /* buffer start, status (out) */
+    init_reg_param(&reg_params[1], "r1", 32, PARAM_OUT);        /* buffer end */
+    init_reg_param(&reg_params[2], "r2", 32, PARAM_OUT);        /* flash target address */
+    init_reg_param(&reg_params[3], "r3", 32, PARAM_OUT);        /* bytes  */
+    init_reg_param(&reg_params[4], "r4", 32, PARAM_OUT);        /* flash base */
+
+    buf_set_u32(reg_params[0].value, 0, 32, source->address);
+    buf_set_u32(reg_params[1].value, 0, 32, source->address + source->size);
+    buf_set_u32(reg_params[2].value, 0, 32, address);
+    buf_set_u32(reg_params[3].value, 0, 32, bytes);
+    buf_set_u32(reg_params[4].value, 0, 32, FCSR_BASE);
+
+	retval = target_run_flash_async_algorithm(target, buffer, bytes/4, 4,
+			0, NULL,
+			5, reg_params,
+			source->address, source->size,
+			write_algorithm->address, 0,
+			&armv7m_info);
+
+    if (retval == ERROR_FLASH_OPERATION_FAILED) {
+        LOG_ERROR("error executing vcm3 flash write algorithm");
+        retval = ERROR_FAIL;
+    }
+
+    target_free_working_area(target, source);
+    target_free_working_area(target, write_algorithm);
+
+    destroy_reg_param(&reg_params[0]);
+    destroy_reg_param(&reg_params[1]);
+    destroy_reg_param(&reg_params[2]);
+    destroy_reg_param(&reg_params[3]);
+    destroy_reg_param(&reg_params[4]);
 
     return retval;
 }

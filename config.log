@@ -30,8 +30,8 @@ Kernel configured for up to 4 processors.
 Processor type: x86_64h (Intel x86-64h Haswell)
 Processors active: 0 1 2 3
 Primary memory available: 8.00 gigabytes
-Default processor set: 345 tasks, 1318 threads, 4 processors
-Load average: 1.44, Mach factor: 2.55
+Default processor set: 342 tasks, 1136 threads, 4 processors
+Load average: 1.46, Mach factor: 2.53
 /bin/machine           = unknown
 /usr/bin/oslevel       = unknown
 /bin/universe          = unknown
@@ -42,6 +42,7 @@ PATH: /bin
 PATH: /usr/sbin
 PATH: /sbin
 PATH: /opt/X11/bin
+PATH: /opt/toolchain/gcc-arm-none-eabi-6-2017-q2-update/bin
 
 
 ## ----------- ##
@@ -401,7 +402,7 @@ configure:12927: checking for library containing ioperm
 configure:12958: gcc -o conftest -g -O2   conftest.c  >&5
 Undefined symbols for architecture x86_64:
   "_ioperm", referenced from:
-      _main in conftest-b072b4.o
+      _main in conftest-c877b4.o
 ld: symbol(s) not found for architecture x86_64
 clang: error: linker command failed with exit code 1 (use -v to see invocation)
 configure:12958: $? = 1
@@ -1300,15 +1301,15 @@ config.status:1275: creating config.h
 config.status:1456: config.h is unchanged
 config.status:1504: executing depfiles commands
 config.status:1581: cd .       && sed -e '/# am--include-marker/d' Makefile         | make -f - am--depfiles
-/var/folders/qr/0l9ffqh93m17n8_5dnlcr0w40000gn/T/GmPCqiYB:4748: warning: overriding commands for target `check-recursive'
-/var/folders/qr/0l9ffqh93m17n8_5dnlcr0w40000gn/T/GmPCqiYB:3644: warning: ignoring old commands for target `check-recursive'
+/var/folders/qr/0l9ffqh93m17n8_5dnlcr0w40000gn/T/GmW2p4pI:4748: warning: overriding commands for target `check-recursive'
+/var/folders/qr/0l9ffqh93m17n8_5dnlcr0w40000gn/T/GmW2p4pI:3644: warning: ignoring old commands for target `check-recursive'
 make: Nothing to be done for `am--depfiles'.
 config.status:1586: $? = 0
 config.status:1504: executing libtool commands
 configure:18844: === configuring in jimtcl (/Users/darko/work/openocd-0.10.0/jimtcl)
-configure:18907: running /bin/sh ./configure.gnu --disable-option-checking '--prefix=/usr/local'  --cache-file=/dev/null --srcdir=.
+configure:18907: running /bin/sh ./configure.gnu --disable-option-checking '--prefix=/usr/local'  'PKG_CONFIG_PATH=/usr/local/Cellar/libffi/3.2.1/lib/pkgconfig' --cache-file=/dev/null --srcdir=.
 configure:18844: === configuring in src/jtag/drivers/libjaylink (/Users/darko/work/openocd-0.10.0/src/jtag/drivers/libjaylink)
-configure:18907: running /bin/sh ./configure.gnu --disable-option-checking '--prefix=/usr/local'  --cache-file=/dev/null --srcdir=.
+configure:18907: running /bin/sh ./configure.gnu --disable-option-checking '--prefix=/usr/local'  'PKG_CONFIG_PATH=/usr/local/Cellar/libffi/3.2.1/lib/pkgconfig' --cache-file=/dev/null --srcdir=.
 
 ## ---------------- ##
 ## Cache variables. ##
@@ -1354,8 +1355,8 @@ ac_cv_env_LT_SYS_LIBRARY_PATH_set=
 ac_cv_env_LT_SYS_LIBRARY_PATH_value=
 ac_cv_env_PKG_CONFIG_LIBDIR_set=
 ac_cv_env_PKG_CONFIG_LIBDIR_value=
-ac_cv_env_PKG_CONFIG_PATH_set=
-ac_cv_env_PKG_CONFIG_PATH_value=
+ac_cv_env_PKG_CONFIG_PATH_set=set
+ac_cv_env_PKG_CONFIG_PATH_value=/usr/local/Cellar/libffi/3.2.1/lib/pkgconfig
 ac_cv_env_PKG_CONFIG_set=
 ac_cv_env_PKG_CONFIG_value=
 ac_cv_env_build_alias_set=
@@ -1620,7 +1621,7 @@ PARPORT_TRUE='#'
 PATH_SEPARATOR=':'
 PKG_CONFIG='/usr/local/bin/pkg-config'
 PKG_CONFIG_LIBDIR=''
-PKG_CONFIG_PATH=''
+PKG_CONFIG_PATH='/usr/local/Cellar/libffi/3.2.1/lib/pkgconfig'
 PRESTO_FALSE='#'
 PRESTO_TRUE=''
 RANLIB='ranlib'
