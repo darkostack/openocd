@@ -18,7 +18,7 @@
  
 /*
  * Params :
- * r0 = workarea start, status (out)
+ * r0 = workarea start
  * r1 = workarea end
  * r2 = flash address
  * r3 = byte count
@@ -42,9 +42,8 @@ wait_fifo:
 	ldr 	r7, [r0, #4]	/* read rp */
 	cmp 	r7, r8			/* wait until rp != wp */
 	beq 	wait_fifo
-
     mov     r6, r2
-    adds    r2, r2, #0x4                        /* increment the address */
+    adds    r2, #0x4                            /* increment the address */
     str     r6, [r4, #VC_FLASH_PGADDR_OFFSET]
     ldr     r6, [r7], #0x04                     /* read one word from src, increment ptr */
     str     r6, [r4, #VC_FLASH_PGDATA_OFFSET]
@@ -53,15 +52,13 @@ busy:
     mov     r5, #0x1
     cmp     r5, r6
     bne     busy
-
 	cmp 	r7, r1			/* wrap rp at end of buffer */
-	it  	cs
-	addcs	r7, r0, #8		/* skip loader args */
+    bcc     no_wrap
+    mov     r7, r0
+	adds	r7, #8		    /* skip loader args */
+no_wrap:
 	str 	r7, [r0, #4]	/* store rp */
-	subs	r3, r3, #4      /* decrement byte count */
-	cbz 	r3, exit		/* loop if not done */
-	b		wait_fifo
-
+	subs	r3, #4          /* decrement byte count */
+	bne		wait_fifo
 exit:
-	mov		r0, r6			/* return status in r0 */
 	bkpt	#0x00
