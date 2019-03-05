@@ -105,11 +105,11 @@ static int vcm3_get_probed_chip_if_halted(struct flash_bank *bank, struct vcm3_i
     }
 }
 
-static int vcm3_flash_wait_for_status_idle(struct vcm3_info *chip)
+static int vcm3_flash_wait_for_status_idle(struct vcm3_info *chip, int timeout)
 {
     int res = ERROR_OK;
     uint32_t status;
-    int timeout = 100;
+    uint32_t counter = timeout;
 
     do {
         res = target_read_u32(chip->target, FCSR_EMBFLASH_STS, &status);
@@ -121,7 +121,7 @@ static int vcm3_flash_wait_for_status_idle(struct vcm3_info *chip)
             return ERROR_OK;
         }
         alive_sleep(1);
-    } while (timeout--);
+    } while (counter--);
 
 	LOG_WARNING("timed out waiting for EMBFLASH_STS idle");
     return ERROR_FLASH_BUSY;
@@ -197,7 +197,11 @@ static int vcm3_flash_generic_erase(struct vcm3_info *chip,
         goto exit; 
     }
 
-    res = vcm3_flash_wait_for_status_idle(chip);
+    if (erase_register == FCSR_EMBFLASH_SERASE) {
+        res = vcm3_flash_wait_for_status_idle(chip, 100);
+    } else if (erase_register == FCSR_EMBFLASH_CERASE) {
+        res = vcm3_flash_wait_for_status_idle(chip, 1000);
+    }
 
 exit:
     vcm3_flash_lock(chip);
@@ -366,12 +370,6 @@ static struct flash_sector *vcm3_find_sector_by_address(struct flash_bank *bank,
     return NULL;
 }
 
-static int vcm3_erase_all(struct vcm3_info *chip)
-{
-    LOG_DEBUG("erasing all non-volatile memory");
-    return vcm3_flash_generic_erase(chip, FCSR_EMBFLASH_CERASE, 0x00000000);
-}
-
 static int vcm3_erase_page(struct flash_bank *bank,
                            struct vcm3_info *chip,
                            struct flash_sector *sector)
@@ -447,7 +445,7 @@ static int vcm3_flash_write(struct vcm3_info *chip, uint32_t offset, const uint8
             target_write_u32(chip->target, FCSR_EMBFLASH_PGADDR, offset);
             target_write_u32(chip->target, FCSR_EMBFLASH_PGDATA, value);
 
-            retval = vcm3_flash_wait_for_status_idle(chip);
+            retval = vcm3_flash_wait_for_status_idle(chip, 100);
             if (retval != ERROR_OK) {
                 return retval;
             }
@@ -681,26 +679,24 @@ FLASH_BANK_COMMAND_HANDLER(vcm3_flash_bank_command)
 
 COMMAND_HANDLER(vcm3_handle_mass_erase_command)
 {
-    int res;
     struct flash_bank *bank = NULL;
+    struct target *target = get_current_target(CMD_CTX);
+    int res;
 
-    res = CALL_COMMAND_HANDLER(flash_command_get_bank, 0, &bank);
+    res = get_flash_bank_by_addr(target, 0x00000000, true, &bank);
     if (res != ERROR_OK) {
+        LOG_ERROR("failed to get flash bank");
         return res;
     }
-
-    LOG_INFO("get flash bank base: 0x%08"PRIx32, bank->base);
 
     assert(bank != NULL);
 
-    struct vcm3_info *chip;
+    LOG_INFO("get flash bank base: 0x%08"PRIx32, bank->base);
 
-    res = vcm3_get_probed_chip_if_halted(bank, &chip);
-    if (res != ERROR_OK) {
-        return res;
-    }
+    struct vcm3_info *chip = bank->driver_priv;
 
-    res = vcm3_erase_all(chip);
+    // chip erase
+    res = vcm3_flash_generic_erase(chip, FCSR_EMBFLASH_CERASE, 0x00000000);
     if (res != ERROR_OK) {
         LOG_ERROR("failed to erase the chip");
         vcm3_protect_check(bank);
