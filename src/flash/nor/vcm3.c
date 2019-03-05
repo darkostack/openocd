@@ -399,7 +399,7 @@ static const uint8_t vcm3_flash_write_code[] = {
                                 /* wait_fifo: */
     0xd0, 0xf8, 0x00, 0x80,     /* ldr      r8, [r0, #0] */
     0xb8, 0xf1, 0x00, 0x0f,     /* cmp      r8, #0 */
-    0x15, 0xd0,                 /* beq      exit */
+    0x0f, 0xd0,                 /* beq      exit */
     0x47, 0x68,                 /* ldr      r7, [r0, #4] */
     0x47, 0x45,                 /* cmp      r7, r8 */
     0xf7, 0xd0,                 /* beq      wait_fifo */
@@ -408,11 +408,6 @@ static const uint8_t vcm3_flash_write_code[] = {
     0xa6, 0x64,                 /* str      r6, [r4, #VC_FLASH_PGADDR_OFFSET] */
     0x57, 0xf8, 0x04, 0x6b,     /* ldr      r6, [r7], #0x04 */
     0xe6, 0x64,                 /* str      r6, [r4, #VC_FLASH_PGDATA_OFFSET] */
-                                /* busy: */
-    0xd4, 0xf8, 0x88, 0x60,     /* ldr      r6, [r4, #VC_FLASH_STS_OFFSET] */
-    0x4f, 0xf0, 0x01, 0x05,     /* mov      r5, #1 */
-    0xb5, 0x42,                 /* cmp      r5, r6 */
-    0xf9, 0xd1,                 /* bne      busy */
     0x8f, 0x42,                 /* cmp      r7, r1 */
     0x01, 0xd3,                 /* bcc      no_wrap */
     0x07, 0x46,                 /* mov      r7, r0 */
@@ -420,7 +415,7 @@ static const uint8_t vcm3_flash_write_code[] = {
                                 /* no_wrap */
     0x47, 0x60,                 /* str      r7, [r0, #4] */
     0x04, 0x3b,                 /* subs     r3, #4 */
-    0xe4, 0xd1,                 /* bne      wait_fifo */
+    0xea, 0xd1,                 /* bne      wait_fifo */
                                 /* exit: */
     0x00, 0xbe,                 /* bkpt     0x0000 */
 };
