@@ -716,6 +716,47 @@ COMMAND_HANDLER(vcm3_handle_mass_erase_command)
     return ERROR_OK;
 }
 
+COMMAND_HANDLER(vcm3_handle_partial_erase_command)
+{
+    struct flash_bank *bank = NULL;
+    struct target *target = get_current_target(CMD_CTX);
+    int res;
+
+    res = get_flash_bank_by_addr(target, 0x00000000, true, &bank);
+    if (res != ERROR_OK) {
+        LOG_ERROR("failed to get flash bank");
+        return res;
+    }
+
+    assert(bank != NULL);
+
+    LOG_INFO("get flash bank base: 0x%08"PRIx32, bank->base);
+
+    struct vcm3_info *chip = bank->driver_priv;
+
+    uint32_t addr = 0;
+
+    // erase sectors except the last one.
+    for (int i = 0; i < (bank->num_sectors - 1); i++) {
+        res = vcm3_flash_generic_erase(chip, FCSR_EMBFLASH_SERASE, addr);
+        if (res != ERROR_OK) {
+            LOG_ERROR("failed to erase the sector %d", i);
+            vcm3_protect_check(bank);
+            return res;
+        }
+        addr += 0x400;
+        bank->sectors[i].is_erased = 1;
+    }
+
+    res = vcm3_protect_check(bank);
+    if (res != ERROR_OK) {
+        LOG_ERROR("failed to check chip's write protection");
+        return res;
+    }
+
+    return ERROR_OK;
+}
+
 static int vcm3_info(struct flash_bank *bank, char *buf, int buf_size)
 {
     int res;
@@ -832,6 +873,12 @@ static const struct command_registration vcm3_exec_command_handlers[] = {
         .handler = vcm3_handle_mass_erase_command,
         .mode    = COMMAND_EXEC,
         .help    = "Erase all flash content of the chip.",
+    },
+    {
+        .name    = "partial_erase",
+        .handler = vcm3_handle_partial_erase_command,
+        .mode    = COMMAND_EXEC,
+        .help    = "Not erase last sector of the flash chip.",
     },
     COMMAND_REGISTRATION_DONE
 };
