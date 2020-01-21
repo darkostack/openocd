@@ -259,8 +259,8 @@ am__objects_3 = src/flash/nor/aduc702x.lo src/flash/nor/aducm360.lo \
 	src/flash/nor/stm32l4x.lo src/flash/nor/str7x.lo \
 	src/flash/nor/str9x.lo src/flash/nor/str9xpec.lo \
 	src/flash/nor/tms470.lo src/flash/nor/vcm3.lo \
-	src/flash/nor/virtual.lo src/flash/nor/xmc1xxx.lo \
-	src/flash/nor/xmc4xxx.lo
+	src/flash/nor/vcm4.lo src/flash/nor/virtual.lo \
+	src/flash/nor/xmc1xxx.lo src/flash/nor/xmc4xxx.lo
 am_src_flash_nor_libocdflashnor_la_OBJECTS = src/flash/nor/core.lo \
 	src/flash/nor/tcl.lo $(am__objects_3) src/flash/nor/drivers.lo \
 	$(am__objects_2)
@@ -754,6 +754,7 @@ am__depfiles_remade = src/$(DEPDIR)/libopenocd_la-hello.Plo \
 	src/flash/nor/$(DEPDIR)/tcl.Plo \
 	src/flash/nor/$(DEPDIR)/tms470.Plo \
 	src/flash/nor/$(DEPDIR)/vcm3.Plo \
+	src/flash/nor/$(DEPDIR)/vcm4.Plo \
 	src/flash/nor/$(DEPDIR)/virtual.Plo \
 	src/flash/nor/$(DEPDIR)/xmc1xxx.Plo \
 	src/flash/nor/$(DEPDIR)/xmc4xxx.Plo \
@@ -1755,6 +1756,7 @@ NOR_DRIVERS = \
 	src/flash/nor/str9xpec.c \
 	src/flash/nor/tms470.c \
 	src/flash/nor/vcm3.c \
+	src/flash/nor/vcm4.c \
 	src/flash/nor/virtual.c \
 	src/flash/nor/xmc1xxx.c \
 	src/flash/nor/xmc4xxx.c
@@ -2100,6 +2102,8 @@ src/flash/nor/str9xpec.lo: src/flash/nor/$(am__dirstamp) \
 src/flash/nor/tms470.lo: src/flash/nor/$(am__dirstamp) \
 	src/flash/nor/$(DEPDIR)/$(am__dirstamp)
 src/flash/nor/vcm3.lo: src/flash/nor/$(am__dirstamp) \
+	src/flash/nor/$(DEPDIR)/$(am__dirstamp)
+src/flash/nor/vcm4.lo: src/flash/nor/$(am__dirstamp) \
 	src/flash/nor/$(DEPDIR)/$(am__dirstamp)
 src/flash/nor/virtual.lo: src/flash/nor/$(am__dirstamp) \
 	src/flash/nor/$(DEPDIR)/$(am__dirstamp)
@@ -2818,6 +2822,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@src/flash/nor/$(DEPDIR)/tcl.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@src/flash/nor/$(DEPDIR)/tms470.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@src/flash/nor/$(DEPDIR)/vcm3.Plo@am__quote@ # am--include-marker
+@AMDEP_TRUE@@am__include@ @am__quote@src/flash/nor/$(DEPDIR)/vcm4.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@src/flash/nor/$(DEPDIR)/virtual.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@src/flash/nor/$(DEPDIR)/xmc1xxx.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@src/flash/nor/$(DEPDIR)/xmc4xxx.Plo@am__quote@ # am--include-marker
@@ -4363,6 +4368,7 @@ distclean: distclean-recursive
 	-rm -f src/flash/nor/$(DEPDIR)/tcl.Plo
 	-rm -f src/flash/nor/$(DEPDIR)/tms470.Plo
 	-rm -f src/flash/nor/$(DEPDIR)/vcm3.Plo
+	-rm -f src/flash/nor/$(DEPDIR)/vcm4.Plo
 	-rm -f src/flash/nor/$(DEPDIR)/virtual.Plo
 	-rm -f src/flash/nor/$(DEPDIR)/xmc1xxx.Plo
 	-rm -f src/flash/nor/$(DEPDIR)/xmc4xxx.Plo
@@ -4761,6 +4767,7 @@ maintainer-clean: maintainer-clean-recursive
 	-rm -f src/flash/nor/$(DEPDIR)/tcl.Plo
 	-rm -f src/flash/nor/$(DEPDIR)/tms470.Plo
 	-rm -f src/flash/nor/$(DEPDIR)/vcm3.Plo
+	-rm -f src/flash/nor/$(DEPDIR)/vcm4.Plo
 	-rm -f src/flash/nor/$(DEPDIR)/virtual.Plo
 	-rm -f src/flash/nor/$(DEPDIR)/xmc1xxx.Plo
 	-rm -f src/flash/nor/$(DEPDIR)/xmc4xxx.Plo
