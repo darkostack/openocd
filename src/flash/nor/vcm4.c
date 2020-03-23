@@ -203,7 +203,6 @@ static int vcm4_flash_config(struct vcm4_info *chip)
 
     // config clock to run gppll 150 mhz
 
-#if 0
     res = target_read_u32(chip->target, 0x4004b004, &temp); // ANA_RG_GPPLL_CTRL0
     if (res != ERROR_OK) {
         LOG_ERROR("failed to read RG_GPPLL_CTRL0 register");
@@ -263,7 +262,6 @@ static int vcm4_flash_config(struct vcm4_info *chip)
         LOG_ERROR("failed to write MISC2_CLKSEL register");
         return res;
     }
-#endif
 
     // config SPIFLASH
 
@@ -493,7 +491,7 @@ static int vcm4_flash_chip_erase(struct vcm4_info *chip)
         return res;
     }
 
-    res = vcm4_flash_wait_for_action_done(chip, 2000);
+    res = vcm4_flash_wait_for_action_done(chip, 10000);
 
     return res;
 }
@@ -531,6 +529,7 @@ static int vcm4_flash_sector_erase(struct vcm4_info *chip, uint32_t addr)
     return res;
 }
 
+#if 0
 static int vcm4_flash_program_word(struct vcm4_info *chip, uint32_t addr, uint32_t data)
 {
     int res = ERROR_OK;
@@ -568,8 +567,8 @@ static int vcm4_flash_program_word(struct vcm4_info *chip, uint32_t addr, uint32
 
     return res;
 }
+#endif
 
-#if 0
 static int vcm4_flash_program_page(struct vcm4_info *chip, uint32_t addr, uint32_t len, uint8_t *buf)
 {
     int res = ERROR_OK;
@@ -618,6 +617,11 @@ static int vcm4_flash_program_page(struct vcm4_info *chip, uint32_t addr, uint32
 
     temp |= (WINBOND_CMDID_PAGE_PROG << FLASH_CMD_CMDID_Pos);
 
+    res = target_write_u32(chip->target, FCSR_FLASH_ADDR, addr);
+    if (res != ERROR_OK) {
+        return res;
+    }
+
     res = target_write_u32(chip->target, FCSR_FLASH_CMD, temp);
     if (res != ERROR_OK) {
         return res;
@@ -627,7 +631,6 @@ static int vcm4_flash_program_page(struct vcm4_info *chip, uint32_t addr, uint32
 
     return res;
 }
-#endif
 
 static int vcm4_protect_check(struct flash_bank *bank)
 {
@@ -660,6 +663,7 @@ static int vcm4_probe(struct flash_bank *bank)
     }
 
     const struct vcm4_device_spec *spec = NULL;
+
     for (size_t i = 0; i < ARRAY_SIZE(vcm4_known_device_table); i++) {
         if (version_id == vcm4_known_device_table[i].version_id) {
             spec = &vcm4_known_device_table[i];
@@ -682,6 +686,9 @@ static int vcm4_probe(struct flash_bank *bank)
 
     chip->code_page_size = spec->sector_size_kb * 0x400;
 
+    LOG_INFO("flash info - size[%"PRIu32"], num_sectors[%d], page_size[%"PRIu32"]",
+            bank->size, bank->num_sectors, chip->code_page_size);
+
     if (!bank->sectors) {
         res = ERROR_FLASH_BANK_NOT_PROBED;
         return res;
@@ -690,9 +697,8 @@ static int vcm4_probe(struct flash_bank *bank)
     for (int i = 0; i < bank->num_sectors; i++) {
         bank->sectors[i].size = chip->code_page_size;
         bank->sectors[i].offset = i * chip->code_page_size;
-        /* mark as unknown */
-        bank->sectors[i].is_erased = -1;
-        bank->sectors[i].is_protected = -1;
+        bank->sectors[i].is_erased = 0;
+        bank->sectors[i].is_protected = 0;
     }
 
     vcm4_protect_check(bank);
@@ -705,8 +711,6 @@ static int vcm4_probe(struct flash_bank *bank)
     vcm4_flash_quad_enable(chip);
 
     vcm4_flash_wprot_disable(chip);
-
-    vcm4_flash_set_cache(chip, 1); // enable cache
 
     // dump register
     uint32_t temp;
@@ -766,23 +770,62 @@ static int vcm4_erase_page(struct flash_bank *bank,
     return res;
 }
 
+#if 0
+static void word_dump(const uint8_t *buffer, uint32_t offset, uint32_t nwords)
+{
+    uint32_t nlines = nwords / 8;
+    uint32_t words[8];
+    while (nlines--) {
+        memcpy(words, buffer, sizeof(words));
+        printf("%08"PRIx32": %08"PRIx32" %08"PRIx32" %08"PRIx32" %08"PRIx32" %08"PRIx32" %08"PRIx32" %08"PRIx32" %08"PRIx32"\n",
+               offset, words[0], words[1], words[2], words[3], words[4], words[5], words[6], words[7]);
+        buffer += sizeof(words);
+        offset += sizeof(words);
+    }
+}
+#endif
+
 /* start a low level flash write for the specified region */
 static int vcm4_flash_write(struct vcm4_info *chip, uint32_t offset, const uint8_t *buffer, uint32_t bytes)
 {
     int res = ERROR_OK;
 
-	LOG_INFO("writing buffer to flash offset=0x%"PRIx32" bytes=0x%"PRIx32, offset, bytes);
+    LOG_INFO("writing buffer to flash offset=0x%"PRIx32" bytes=0x%"PRIx32, offset, bytes);
 
     assert(bytes % 4 == 0);
 
     LOG_WARNING("no working area available, falling back to slow memory writes");
 
+    //word_dump(buffer, offset, 104);
+
+#if 0
     for (; bytes > 0; bytes -= 4) {
-        uint32_t value;
+        uint32_t value, temp;
         memcpy(&value, buffer, sizeof(uint32_t));
         vcm4_flash_program_word(chip, offset, value);
+        res = target_read_u32(chip->target, offset, &temp);
+        if (temp == value) {
+            LOG_INFO("write: 0x%08"PRIx32" at: 0x%08"PRIx32" -- SUCCEED", value, offset);
+        } else {
+            LOG_ERROR("flash write failed");
+            return ERROR_FAIL;
+        }
         offset += 4;
         buffer += 4;
+    }
+#endif
+
+    uint32_t bytes_pages = bytes / 256;
+    uint32_t bytes_pages_remain = bytes % 256;
+
+    for (uint32_t i = 0; i < (bytes_pages * 256); i += 256) {
+        res = vcm4_flash_program_page(chip, offset, 256, (uint8_t *)buffer);
+        offset += 256;
+        buffer += 256;
+    }
+
+    if (bytes_pages_remain != 0) {
+        res = vcm4_flash_program_page(chip, offset, bytes_pages_remain, (uint8_t *)buffer);
     }
 
     return res;
@@ -795,11 +838,17 @@ static int vcm4_write_pages(struct flash_bank *bank, uint32_t start, uint32_t en
 {
     int res = ERROR_OK;
     struct vcm4_info *chip = bank->driver_priv;
-    struct flash_sector *sector;
-    uint32_t offset;
+
+    LOG_INFO("write pages: start: 0x%"PRIx32" end: 0x%"PRIx32, start, end);
 
     assert(start % chip->code_page_size == 0);
     assert(end % chip->code_page_size == 0);
+
+    /* Note: for now we erase entire chip due to bootloader behaviour */
+
+#if 0
+    struct flash_sector *sector;
+    uint32_t offset;
 
     /* erase all sectors */
     for (offset = start; offset < end; offset += chip->code_page_size) {
@@ -819,8 +868,18 @@ static int vcm4_write_pages(struct flash_bank *bank, uint32_t start, uint32_t en
                 return res;
             }
         }
-        sector->is_erased = 0;
+        sector->is_erased = 1;
     }
+#else
+    res = vcm4_flash_chip_erase(chip);
+    if (res != ERROR_OK) {
+        LOG_ERROR("failed to erase the chip");
+        return res;
+    }
+    for (int i = 0; i < bank->num_sectors; i++) {
+        bank->sectors[i].is_erased = 1;
+    }
+#endif
 
     res = vcm4_flash_write(chip, start, buffer, (end - start));
 
@@ -860,39 +919,39 @@ static int vcm4_code_flash_write(struct flash_bank *bank,
     uint32_t first_page_offset = first_page * chip->code_page_size;
     uint32_t last_page_offset = last_page * chip->code_page_size;
 
-	LOG_DEBUG("Padding write from 0x%08"PRIx32"-0x%08"PRIx32" as 0x%08"PRIx32"-0x%08"PRIx32,
-		      offset, offset+count, first_page_offset, last_page_offset);
+    LOG_INFO("Padding write from 0x%08"PRIx32"-0x%08"PRIx32" as 0x%08"PRIx32"-0x%08"PRIx32,
+             offset, offset+count, first_page_offset, last_page_offset);
 
-	uint32_t page_cnt = last_page - first_page;
-	uint8_t buffer_to_flash[page_cnt * chip->code_page_size];
+    uint32_t page_cnt = last_page - first_page;
+    uint8_t buffer_to_flash[page_cnt * chip->code_page_size];
 
-	/* Fill in any space between start of first page and start of buffer */
-	uint32_t pre = offset - first_page_offset;
-	if (pre > 0) {
-		res = target_read_memory(bank->target,
-					first_page_offset,
-					1,
-					pre,
-					buffer_to_flash);
-		if (res != ERROR_OK)
-			return res;
-	}
+    /* Fill in any space between start of first page and start of buffer */
+    uint32_t pre = offset - first_page_offset;
+    if (pre > 0) {
+        res = target_read_memory(bank->target,
+                                 first_page_offset,
+                                 1,
+                                 pre,
+                                 buffer_to_flash);
+        if (res != ERROR_OK)
+            return res;
+    }
 
-	/* Fill in main contents of buffer */
-	memcpy(buffer_to_flash+pre, buffer, count);
+    /* Fill in main contents of buffer */
+    memcpy(buffer_to_flash+pre, buffer, count);
 
-	/* Fill in any space between end of buffer and end of last page */
-	uint32_t post = last_page_offset - (offset+count);
-	if (post > 0) {
-		/* Retrieve the full row contents from Flash */
-		res = target_read_memory(bank->target,
-					offset + count,
-					1,
-					post,
-					buffer_to_flash+pre+count);
-		if (res != ERROR_OK)
-			return res;
-	}
+    /* Fill in any space between end of buffer and end of last page */
+    uint32_t post = last_page_offset - (offset+count);
+    if (post > 0) {
+        /* Retrieve the full row contents from Flash */
+        res = target_read_memory(bank->target,
+                                 offset + count,
+                                 1,
+                                 post,
+                                 buffer_to_flash+pre+count);
+        if (res != ERROR_OK)
+            return res;
+    }
 
     return vcm4_write_pages(bank, first_page_offset, last_page_offset, buffer_to_flash);
 }
@@ -931,7 +990,7 @@ FLASH_BANK_COMMAND_HANDLER(vcm4_flash_bank_command)
 
     chip->probed = false;
     bank->driver_priv = chip;
-    
+
     return ERROR_OK;
 }
 
@@ -970,6 +1029,49 @@ COMMAND_HANDLER(vcm4_handle_mass_erase_command)
     return res;
 }
 
+COMMAND_HANDLER(vcm4_handle_write_test_command)
+{
+    struct flash_bank *bank = NULL;
+    struct flash_sector *sector;
+    struct target *target = get_current_target(CMD_CTX);
+    int res;
+
+    res = get_flash_bank_by_addr(target, 0x00000000, true, &bank);
+    if (res != ERROR_OK) {
+        LOG_ERROR("failed to get flash bank");
+        return res;
+    }
+
+    assert(bank != NULL);
+
+    LOG_INFO("get flash bank base: 0x%08"PRIx32, bank->base);
+
+    struct vcm4_info *chip = bank->driver_priv;
+
+    sector = vcm4_find_sector_by_address(bank, 0);
+
+    if (sector->is_erased != 1) {
+        res = vcm4_erase_page(bank, chip, sector);
+        if (res != ERROR_OK) {
+            LOG_ERROR("failed to erase sector at 0x%08"PRIx32, sector->offset);
+            return res;
+        }
+    }
+
+    sector->is_erased = 1;
+
+    uint32_t word = 0xdeadbeef;
+    uint32_t pages[64];
+
+    for (int i = 0; i < 64; i++) {
+        pages[i] = word;
+    }
+
+    res = vcm4_flash_program_page(chip, sector->offset, 253, (uint8_t *)pages);
+
+    return res;
+}
+
 static int vcm4_get_info(struct flash_bank *bank, char *buf, int buf_size)
 {
     int res;
@@ -992,6 +1094,12 @@ static const struct command_registration vcm4_exec_command_handlers[] = {
         .handler = vcm4_handle_mass_erase_command,
         .mode    = COMMAND_EXEC,
         .help    = "Erase all flash content of the chip.",
+    },
+    {
+        .name    = "write_test",
+        .handler = vcm4_handle_write_test_command,
+        .mode    = COMMAND_EXEC,
+        .help    = "Test flash write function.",
     },
     COMMAND_REGISTRATION_DONE
 };
