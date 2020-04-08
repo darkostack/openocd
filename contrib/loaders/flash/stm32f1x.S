@@ -46,6 +46,7 @@ wait_fifo:
 	ldr 	r5, [r2, #4]	/* read rp */
 	cmp 	r5, r6			/* wait until rp != wp */
 	beq 	wait_fifo
+
 	ldrh	r6, [r5]	/* "*target_address++ = *rp++" */
 	strh	r6, [r4]
 	adds	r5, #2

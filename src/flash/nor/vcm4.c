@@ -127,28 +127,6 @@ static int vcm4_get_probed_chip_if_halted(struct flash_bank *bank, struct vcm4_i
     }
 }
 
-static int vcm4_flash_wait_for_status_idle(struct vcm4_info *chip, int timeout)
-{
-    int res = ERROR_OK;
-    uint32_t temp = 0;
-    uint32_t counter = timeout;
-
-    do {
-        res = target_read_u32(chip->target, FCSR_FLASH_SR, &temp);
-        if (res != ERROR_OK) {
-            LOG_ERROR("can't read FLASH SR register");
-            return res;
-        }
-        if ((temp & 0x1) == 0) {
-            return ERROR_OK;
-        }
-        alive_sleep(1);
-    } while (counter--);
-
-    LOG_WARNING("timeout waiting for FLASH STATUS idle");
-    return ERROR_FLASH_BUSY;
-}
-
 static int vcm4_flash_wait_for_action_done(struct vcm4_info *chip, int timeout)
 {
     int res = ERROR_OK;
@@ -337,11 +315,6 @@ static int vcm4_flash_quad_enable(struct vcm4_info *chip)
     uint32_t temp = 0;
     uint32_t data = 0;
 
-    res = vcm4_flash_wait_for_status_idle(chip, 100);
-    if (res != ERROR_OK) {
-        return res;
-    }
-
     res = vcm4_flash_write_enable(chip);
     if (res != ERROR_OK) {
         return res;
@@ -369,7 +342,7 @@ static int vcm4_flash_quad_enable(struct vcm4_info *chip)
             return res;
         }
 
-        res = vcm4_flash_wait_for_status_idle(chip, 100);
+        res = vcm4_flash_wait_for_action_done(chip, 100);
 
     } else {
 
@@ -406,11 +379,6 @@ static int vcm4_flash_write_status_register(struct vcm4_info *chip, uint8_t cmdi
     int res = ERROR_OK;
     uint32_t temp = 0;
 
-    res = vcm4_flash_wait_for_status_idle(chip, 100);
-    if (res != ERROR_OK) {
-        return res;
-    }
-
     res = vcm4_flash_write_enable(chip);
     if (res != ERROR_OK) {
         return res;
@@ -438,7 +406,7 @@ static int vcm4_flash_write_status_register(struct vcm4_info *chip, uint8_t cmdi
         return res;
     }
 
-    res = vcm4_flash_wait_for_status_idle(chip, 100);
+    res = vcm4_flash_wait_for_action_done(chip, 100);
 
     return res;
 }
@@ -770,63 +738,133 @@ static int vcm4_erase_page(struct flash_bank *bank,
     return res;
 }
 
-#if 0
-static void word_dump(const uint8_t *buffer, uint32_t offset, uint32_t nwords)
-{
-    uint32_t nlines = nwords / 8;
-    uint32_t words[8];
-    while (nlines--) {
-        memcpy(words, buffer, sizeof(words));
-        printf("%08"PRIx32": %08"PRIx32" %08"PRIx32" %08"PRIx32" %08"PRIx32" %08"PRIx32" %08"PRIx32" %08"PRIx32" %08"PRIx32"\n",
-               offset, words[0], words[1], words[2], words[3], words[4], words[5], words[6], words[7]);
-        buffer += sizeof(words);
-        offset += sizeof(words);
-    }
-}
-#endif
+// WORD PROGRAM
+static const uint8_t vcm4_flash_write_code[] = {
+    /* see contrib/loaders/flash/vcm4x_word_program.S */
+    0xd0, 0xf8, 0x00, 0x80,
+    0xb8, 0xf1, 0x00, 0x0f,
+    0x1c, 0xd0,
+    0x47, 0x68,
+    0x47, 0x45,
+    0xf7, 0xd0,
+    0x0d, 0x4e,
+    0x26, 0x60,
+
+    0x26, 0x68,
+    0x16, 0xf0, 0x00, 0x4f,
+    0xfb, 0xd1,
+    0x57, 0xf8, 0x04, 0x6b,
+    0xc4, 0xf8, 0x00, 0x61,
+    0x16, 0x46,
+    0x04, 0x32,
+    0x66, 0x60,
+    0x08, 0x4e,
+    0x26, 0x60,
+
+    0x26, 0x68,
+    0x16, 0xf0, 0x00, 0x4f,
+    0xfb, 0xd1,
+    0x8f, 0x42,
+    0x01, 0xd3,
+    0x07, 0x46,
+    0x08, 0x37,
+
+    0x47, 0x60,
+    0x04, 0x3b,
+    0xdd, 0xd1,
+
+    0x00, 0xbe,
+    0x00, 0x00,
+    0x06, 0x00, 0x00, 0x81,
+    0x02, 0x07, 0x03, 0x81,
+};
 
 /* start a low level flash write for the specified region */
 static int vcm4_flash_write(struct vcm4_info *chip, uint32_t offset, const uint8_t *buffer, uint32_t bytes)
 {
+    struct target *target = chip->target;
+    uint32_t buffer_size = 16384;
+    struct working_area *write_algorithm;
+    struct working_area *source;
+    uint32_t address = offset;
+    struct reg_param reg_params[5];
+    struct armv7m_algorithm armv7m_info;
     int res = ERROR_OK;
 
     LOG_INFO("writing buffer to flash offset=0x%"PRIx32" bytes=0x%"PRIx32, offset, bytes);
 
     assert(bytes % 4 == 0);
 
-    LOG_WARNING("no working area available, falling back to slow memory writes");
-
-    //word_dump(buffer, offset, 104);
-
-#if 0
-    for (; bytes > 0; bytes -= 4) {
-        uint32_t value, temp;
-        memcpy(&value, buffer, sizeof(uint32_t));
-        vcm4_flash_program_word(chip, offset, value);
-        res = target_read_u32(chip->target, offset, &temp);
-        if (temp == value) {
-            LOG_INFO("write: 0x%08"PRIx32" at: 0x%08"PRIx32" -- SUCCEED", value, offset);
-        } else {
-            LOG_ERROR("flash write failed");
-            return ERROR_FAIL;
+    /* allocate working area with flash programming code */
+    if (target_alloc_working_area(target, sizeof(vcm4_flash_write_code), &write_algorithm) != ERROR_OK) {
+        LOG_INFO("can't allocate working area use slow mode!");
+        uint32_t bytes_pages = bytes / 256;
+        uint32_t bytes_pages_remain = bytes % 256;
+        for (uint32_t i = 0; i < (bytes_pages * 256); i += 256) {
+            res = vcm4_flash_program_page(chip, offset, 256, (uint8_t *)buffer);
+            offset += 256;
+            buffer += 256;
         }
-        offset += 4;
-        buffer += 4;
-    }
-#endif
-
-    uint32_t bytes_pages = bytes / 256;
-    uint32_t bytes_pages_remain = bytes % 256;
-
-    for (uint32_t i = 0; i < (bytes_pages * 256); i += 256) {
-        res = vcm4_flash_program_page(chip, offset, 256, (uint8_t *)buffer);
-        offset += 256;
-        buffer += 256;
+        if (bytes_pages_remain != 0) {
+            res = vcm4_flash_program_page(chip, offset, bytes_pages_remain, (uint8_t *)buffer);
+        }
+        return ERROR_OK;
     }
 
-    if (bytes_pages_remain != 0) {
-        res = vcm4_flash_program_page(chip, offset, bytes_pages_remain, (uint8_t *)buffer);
+    res = target_write_buffer(target, write_algorithm->address,
+                              sizeof(vcm4_flash_write_code),
+                              vcm4_flash_write_code);
+
+    if (res != ERROR_OK) {
+        return res;
     }
+
+    /* memory buffer */
+    while (target_alloc_working_area(target, buffer_size, &source) != ERROR_OK) {
+        buffer_size /= 2;
+        if (buffer_size <= 256) {
+			/* free working area, write algorithm already allocated */
+			target_free_working_area(target, write_algorithm);
+			LOG_WARNING("No large enough working area available, can't do block memory writes");
+			return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
+        }
+    }
+
+    armv7m_info.common_magic = ARMV7M_COMMON_MAGIC;
+    armv7m_info.core_mode = ARM_MODE_THREAD;
+
+    init_reg_param(&reg_params[0], "r0", 32, PARAM_IN_OUT);     /* buffer start, status (out) */
+    init_reg_param(&reg_params[1], "r1", 32, PARAM_OUT);        /* buffer end */
+    init_reg_param(&reg_params[2], "r2", 32, PARAM_OUT);        /* flash target address */
+    init_reg_param(&reg_params[3], "r3", 32, PARAM_OUT);        /* bytes  */
+    init_reg_param(&reg_params[4], "r4", 32, PARAM_OUT);        /* flash base */
+
+    buf_set_u32(reg_params[0].value, 0, 32, source->address);
+    buf_set_u32(reg_params[1].value, 0, 32, source->address + source->size);
+    buf_set_u32(reg_params[2].value, 0, 32, address);
+    buf_set_u32(reg_params[3].value, 0, 32, bytes);
+    buf_set_u32(reg_params[4].value, 0, 32, FCSR_BASE);
+
+	res = target_run_flash_async_algorithm(target, buffer, bytes/4, 4,
+			                               0, NULL,
+			                               5, reg_params,
+			                               source->address, source->size,
+			                               write_algorithm->address, 0,
+			                               &armv7m_info);
+
+    if (res == ERROR_FLASH_OPERATION_FAILED) {
+        LOG_ERROR("error executing vcm3 flash write algorithm");
+        res = ERROR_FAIL;
+    }
+
+    target_free_working_area(target, source);
+    target_free_working_area(target, write_algorithm);
+
+    destroy_reg_param(&reg_params[0]);
+    destroy_reg_param(&reg_params[1]);
+    destroy_reg_param(&reg_params[2]);
+    destroy_reg_param(&reg_params[3]);
+    destroy_reg_param(&reg_params[4]);
 
     return res;
 }
@@ -1067,7 +1105,9 @@ COMMAND_HANDLER(vcm4_handle_write_test_command)
         pages[i] = word;
     }
 
-    res = vcm4_flash_program_page(chip, sector->offset, 253, (uint8_t *)pages);
+    //res = vcm4_flash_program_page(chip, sector->offset, 253, (uint8_t *)pages);
+
+    res = vcm4_flash_write(chip, sector->offset, (const uint8_t *)pages, 100);
 
     return res;
 }
