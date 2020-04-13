@@ -41,7 +41,7 @@ wait_fifo:
     ldr     r7, [r0, #4]                        /* read rp */
     cmp     r7, r8                              /* wait until rp != wp */
     beq     wait_fifo
-    ldr     r6,=0x81000006                      /* write enable */
+    ldr     r6, FLASH_WRITE_ENABLE              /* write enable */
     str     r6, [r4, #FCSR_FLASH_CMD_OFFSET]
 wait_write_enable:
     ldr     r6, [r4, #FCSR_FLASH_CMD_OFFSET]    /* load CMD register */
@@ -52,7 +52,7 @@ wait_write_enable:
     mov     r6, r2
     adds    r2, #0x4                            /* increment the addres */
     str     r6, [r4, #FCSR_FLASH_ADDR_OFFSET]
-    ldr     r6,=0x81030702
+    ldr     r6, FLASH_WORD_PROGRAM
     str     r6, [r4, #FCSR_FLASH_CMD_OFFSET]
 wait_write_program:
     ldr     r6, [r4, #FCSR_FLASH_CMD_OFFSET]    /* load CMD register */
@@ -68,3 +68,6 @@ no_wrap:
     bne     wait_fifo
 exit:
     bkpt    #0x00
+
+FLASH_WRITE_ENABLE: .word 0x81000006
+FLASH_WORD_PROGRAM: .word 0x81030702
