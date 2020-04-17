@@ -1,0 +1,70 @@
+
+vcm4x_page_program.o:     file format elf32-littlearm
+
+
+Disassembly of section .text:
+
+00000000 <wait_fifo-0x2>:
+   0:	4d17      	ldr	r5, [pc, #92]	; (60 <FLASH_BUF_START_ADDR>)
+
+00000002 <wait_fifo>:
+   2:	f8d0 8000 	ldr.w	r8, [r0]
+   6:	f1b8 0f00 	cmp.w	r8, #0
+   a:	d028      	beq.n	5e <exit>
+   c:	6847      	ldr	r7, [r0, #4]
+   e:	4547      	cmp	r7, r8
+  10:	d0f7      	beq.n	2 <wait_fifo>
+  12:	f8df 8050 	ldr.w	r8, [pc, #80]	; 64 <FLASH_BUF_END_ADDR>
+  16:	4545      	cmp	r5, r8
+  18:	db16      	blt.n	48 <fill_flash_buf>
+  1a:	4e13      	ldr	r6, [pc, #76]	; (68 <FLASH_WRITE_ENABLE>)
+  1c:	6026      	str	r6, [r4, #0]
+
+0000001e <wait_write_enable>:
+  1e:	6826      	ldr	r6, [r4, #0]
+  20:	f016 4f00 	tst.w	r6, #2147483648	; 0x80000000
+  24:	d1fb      	bne.n	1e <wait_write_enable>
+  26:	f857 6b04 	ldr.w	r6, [r7], #4
+  2a:	f845 6b04 	str.w	r6, [r5], #4
+  2e:	4616      	mov	r6, r2
+  30:	f512 7280 	adds.w	r2, r2, #256	; 0x100
+  34:	6066      	str	r6, [r4, #4]
+  36:	4e0d      	ldr	r6, [pc, #52]	; (6c <FLASH_PAGE_PROGRAM>)
+  38:	6026      	str	r6, [r4, #0]
+
+0000003a <wait_write_program>:
+  3a:	6826      	ldr	r6, [r4, #0]
+  3c:	f016 4f00 	tst.w	r6, #2147483648	; 0x80000000
+  40:	d1fb      	bne.n	3a <wait_write_program>
+  42:	f8df 501c 	ldr.w	r5, [pc, #28]	; 60 <FLASH_BUF_START_ADDR>
+  46:	e003      	b.n	50 <wrap_rp_at_end_of_buffer>
+
+00000048 <fill_flash_buf>:
+  48:	f857 6b04 	ldr.w	r6, [r7], #4
+  4c:	f845 6b04 	str.w	r6, [r5], #4
+
+00000050 <wrap_rp_at_end_of_buffer>:
+  50:	428f      	cmp	r7, r1
+  52:	d301      	bcc.n	58 <no_wrap>
+  54:	4607      	mov	r7, r0
+  56:	3708      	adds	r7, #8
+
+00000058 <no_wrap>:
+  58:	6047      	str	r7, [r0, #4]
+  5a:	3b04      	subs	r3, #4
+  5c:	d1d1      	bne.n	2 <wait_fifo>
+
+0000005e <exit>:
+  5e:	be00      	bkpt	0x0000
+
+00000060 <FLASH_BUF_START_ADDR>:
+  60:	40020100 	.word	0x40020100
+
+00000064 <FLASH_BUF_END_ADDR>:
+  64:	400201fc 	.word	0x400201fc
+
+00000068 <FLASH_WRITE_ENABLE>:
+  68:	81000006 	.word	0x81000006
+
+0000006c <FLASH_PAGE_PROGRAM>:
+  6c:	81ff0702 	.word	0x81ff0702

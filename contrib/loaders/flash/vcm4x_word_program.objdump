@@ -1,0 +1,50 @@
+
+vcm4x_word_program.o:     file format elf32-littlearm
+
+
+Disassembly of section .text:
+
+00000000 <wait_fifo>:
+   0:	f8d0 8000 	ldr.w	r8, [r0]
+   4:	f1b8 0f00 	cmp.w	r8, #0
+   8:	d01d      	beq.n	46 <exit>
+   a:	6847      	ldr	r7, [r0, #4]
+   c:	4547      	cmp	r7, r8
+   e:	d0f7      	beq.n	0 <wait_fifo>
+  10:	f8df 6034 	ldr.w	r6, [pc, #52]	; 48 <FLASH_WRITE_ENABLE>
+  14:	6026      	str	r6, [r4, #0]
+
+00000016 <wait_write_enable>:
+  16:	6826      	ldr	r6, [r4, #0]
+  18:	f016 4f00 	tst.w	r6, #2147483648	; 0x80000000
+  1c:	d1fb      	bne.n	16 <wait_write_enable>
+  1e:	f857 6b04 	ldr.w	r6, [r7], #4
+  22:	f8c4 6100 	str.w	r6, [r4, #256]	; 0x100
+  26:	4616      	mov	r6, r2
+  28:	3204      	adds	r2, #4
+  2a:	6066      	str	r6, [r4, #4]
+  2c:	4e07      	ldr	r6, [pc, #28]	; (4c <FLASH_WORD_PROGRAM>)
+  2e:	6026      	str	r6, [r4, #0]
+
+00000030 <wait_write_program>:
+  30:	6826      	ldr	r6, [r4, #0]
+  32:	f016 4f00 	tst.w	r6, #2147483648	; 0x80000000
+  36:	d1fb      	bne.n	30 <wait_write_program>
+  38:	428f      	cmp	r7, r1
+  3a:	d301      	bcc.n	40 <no_wrap>
+  3c:	4607      	mov	r7, r0
+  3e:	3708      	adds	r7, #8
+
+00000040 <no_wrap>:
+  40:	6047      	str	r7, [r0, #4]
+  42:	3b04      	subs	r3, #4
+  44:	d1dc      	bne.n	0 <wait_fifo>
+
+00000046 <exit>:
+  46:	be00      	bkpt	0x0000
+
+00000048 <FLASH_WRITE_ENABLE>:
+  48:	81000006 	.word	0x81000006
+
+0000004c <FLASH_WORD_PROGRAM>:
+  4c:	81030702 	.word	0x81030702

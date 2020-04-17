@@ -550,24 +550,9 @@ static int vcm4_flash_program_page(struct vcm4_info *chip, uint32_t addr, uint32
         return res;
     }
 
-    uint32_t counter = bytes / 4;
-    uint32_t remain = bytes % 4;
-
-    for (i = 0; i < (counter * 4); i += 4) {
+    for (i = 0; i < bytes; i += 4) {
         memcpy(&data, &buf[i], sizeof(uint32_t));
         res = target_write_u32(chip->target, FCSR_FLASH_BUF0 + i, data);
-        if (res != ERROR_OK) {
-            return res;
-        }
-    }
-
-    data = 0;
-
-    if (remain) {
-        for (i = 0; i < remain; i++) {
-            data |= (buf[(counter * 4) + i] << (i * 8));
-        }
-        res = target_write_u32(chip->target, FCSR_FLASH_BUF0 + counter, data);
         if (res != ERROR_OK) {
             return res;
         }
@@ -837,7 +822,7 @@ static const uint8_t vcm4_flash_write_code[] = {
 static int vcm4_flash_write(struct vcm4_info *chip, uint32_t offset, const uint8_t *buffer, uint32_t bytes)
 {
     struct target *target = chip->target;
-    uint32_t buffer_size = 16384;
+    uint32_t buffer_size = 1024 * 32;
     struct working_area *write_algorithm;
     struct working_area *source;
     uint32_t address = offset;
@@ -852,16 +837,10 @@ static int vcm4_flash_write(struct vcm4_info *chip, uint32_t offset, const uint8
     /* allocate working area with flash programming code */
     if (target_alloc_working_area(target, sizeof(vcm4_flash_write_code), &write_algorithm) != ERROR_OK) {
         LOG_INFO("can't allocate working area for write algorithm use slow mode!");
-        uint32_t bytes_pages = bytes / 256;
-        uint32_t bytes_pages_remain = bytes % 256;
-        for (uint32_t i = 0; i < (bytes_pages * 256); i += 256) {
+        for (uint32_t i = 0; i < bytes; i += 256) {
             res = vcm4_flash_program_page(chip, offset, 256, (uint8_t *)buffer);
             offset += 256;
             buffer += 256;
-        }
-        if (bytes_pages_remain != 0) {
-            LOG_INFO("bytes pages remain: %"PRIu32, bytes_pages_remain);
-            res = vcm4_flash_program_page(chip, offset, bytes_pages_remain, (uint8_t *)buffer);
         }
         return ERROR_OK;
     }
@@ -876,12 +855,13 @@ static int vcm4_flash_write(struct vcm4_info *chip, uint32_t offset, const uint8
 
     /* memory buffer */
     while (target_alloc_working_area(target, buffer_size, &source) != ERROR_OK) {
+        LOG_WARNING("Not enough space, try to reduce the allocate buffer by half!");
         buffer_size /= 2;
         if (buffer_size <= 256) {
-			/* free working area, write algorithm already allocated */
-			target_free_working_area(target, write_algorithm);
-			LOG_WARNING("No large enough working area available, can't do block memory writes");
-			return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
+            /* free working area, write algorithm already allocated */
+            target_free_working_area(target, write_algorithm);
+            LOG_WARNING("No large enough working area available, can't do block memory writes");
+            return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
         }
     }
 
@@ -900,12 +880,12 @@ static int vcm4_flash_write(struct vcm4_info *chip, uint32_t offset, const uint8
     buf_set_u32(reg_params[3].value, 0, 32, bytes);
     buf_set_u32(reg_params[4].value, 0, 32, FCSR_BASE);
 
-	res = target_run_flash_async_algorithm(target, buffer, bytes/4, 4,
-			                               0, NULL,
-			                               5, reg_params,
-			                               source->address, source->size,
-			                               write_algorithm->address, 0,
-			                               &armv7m_info);
+    res = target_run_flash_async_algorithm(target, buffer, bytes/4, 4,
+                                           0, NULL,
+                                           5, reg_params,
+                                           source->address, source->size,
+                                           write_algorithm->address, 0,
+                                           &armv7m_info);
 
     if (res == ERROR_FLASH_OPERATION_FAILED) {
         LOG_ERROR("error executing vcm3 flash write algorithm");
